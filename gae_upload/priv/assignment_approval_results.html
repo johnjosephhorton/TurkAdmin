@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block body %}
+  <h2>Assignment Approval Operation</h2>
+
+  <h3>HIT ID</h3>
+
+  <p>{{ approval.hit_id|escape }}</p>
+
+  <h3>Confirmed</h3>
+
+  <p>{{ approval.confirmed|escape }}</p>
+
+  <h3>Results</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Assignment ID</th>
+        <th scope="col">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for result in results %}
+        <tr>
+          <td>{{ result.assignment_id|escape }}</td>
+          <td>{{ result.status|escape }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

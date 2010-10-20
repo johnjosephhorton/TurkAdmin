@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block body %}
+  <h2>Worker Notification Operation</h2>
+
+  <h3>Message Subject</h3>
+
+  <p>{{ notification.message_subject|escape }}</p>
+
+  <h3>Message Text</h3>
+
+  <p>{{ notification.message_text|escape }}</p>
+
+  <h3>Confirmed</h3>
+
+  <p>{{ notification.confirmed|escape }}</p>
+
+  <h3>Worker IDs</h3>
+
+  <ul class="block">
+    {% for id in notification.worker_ids %}
+      <li>{{ id|escape }}</li>
+    {% endfor %}
+  </ul>
+{% endblock %}

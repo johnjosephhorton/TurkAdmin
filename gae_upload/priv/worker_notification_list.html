@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block body %}
+  <table class="clickable_rows">
+    <thead>
+      <tr>
+        <th scope="col">Confirmed</th>
+        <th scope="col">Message Subject</th>
+        <th scope="col">Workers</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+        <tr data-url="{{ item.url|escape }}">
+          <td>{{ item.notification.confirmed|date:"Y-m-d H:i" }}</td>
+          <td>{{ item.notification.message_subject|escape }}</td>
+          <td>{{ item.notification.worker_ids|length }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

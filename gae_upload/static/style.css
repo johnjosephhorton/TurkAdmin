@@ -1,0 +1,104 @@
+body {
+  font-family: "Helvetica", "Tahoma", sans-serif;
+  font-size: 14px;
+}
+
+h2, h3, p, form div, table, form label, form input, form textarea {
+  display: block;
+}
+
+h2 {
+  margin: 25px 20px;
+  font-size: 20px;
+}
+
+h3 {
+  margin: 25px 20px 10px;
+}
+
+p {
+  margin: 5px 20px;
+}
+
+form div {
+  margin: 20px 20px 0;
+}
+form label {
+  margin-bottom: 5px;
+  font-weight: bold;
+  font-size: 12px;
+}
+form input[type=text] {
+  padding: 3px 5px;
+  font-size: inherit;
+}
+form input[type=submit] {
+  margin-top: 30px;
+}
+form ul, ul.block {
+  margin: 0 20px;
+}
+form li, ul.block li {
+  margin-top: 5px;
+}
+
+table {
+  display: block;
+  margin: 0 20px;
+  border-collapse: collapse;
+}
+table th {
+  background: #EEE;
+}
+table th, table td {
+  padding: 5px 20px 5px 9px;
+  border: solid 1px #999;
+  font-size: 12px;
+  text-align: left;
+}
+table th:last-child, table td:last-child {
+  padding-right: 9px;
+  padding-left: 20px;
+  text-align: right;
+}
+table tr[data-url]:hover {
+  cursor: pointer;
+}
+
+.nav {
+  padding: 0 10px;
+  margin-bottom: 20px;
+  border-bottom: solid 1px black;
+  background: #333;
+}
+.nav li {
+  display: inline-block;
+}
+.nav a {
+  display: inline-block;
+  padding: 10px;
+  text-decoration: none;
+  text-shadow: 0 0 3px black;
+  color: white;
+}
+.nav a[rel=self] {
+  background: #222;
+}
+
+.menu {
+  margin: 20px;
+  width: 300px;
+  border: solid 1px #999;
+  border-top: none;
+}
+.menu a {
+  width: 260px;
+  padding: 10px 20px;
+  background: #DDD;
+  border-top: solid 1px #999;
+  display: inline-block;
+  font-size: 18px;
+  font-weight: bold;
+  text-decoration: none;
+  color: #333;
+}

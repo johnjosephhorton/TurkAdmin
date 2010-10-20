@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Turkontrol</title>
+<link rel="stylesheet" href="/static/reset.css">
+<link rel="stylesheet" href="/static/style.css">
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+{% block head %}{% endblock %}
+</head>
+<body>
+
+<ul class="nav"><li><a href="/">Actions</a></li><li><a href="/assignment/approval/list">Assignment Approvals</a></li><li><a href="/assignment/rejection/list">Assignment Rejections</a></li><li><a href="/worker/bonus/list">Worker Bonuses</a></li><li><a href="/worker/notification/list">Worker Notifications</a></li></ul>
+
+{% block body %}{% endblock %}
+
+<script>
+  $(document).ready(function () {
+    $('.nav a').each(function () {
+      var link = $(this);
+
+      if (link.attr('href') == window.location.pathname) {
+        link.attr('rel', 'self');
+      }
+    });
+
+    $('.clickable_rows tbody').click(function (event) {
+      var tr = $(event.target).closest('tr');
+
+      window.location = tr.attr('data-url');
+    });
+  });
+</script>
+
+</body>
+</html>
