@@ -35,12 +35,6 @@ form input[type=text] {
 form input[type=submit] {
   margin-top: 30px;
 }
-form ul, ul.block {
-  margin: 0 20px;
-}
-form li, ul.block li {
-  margin-top: 5px;
-}
 
 table {
   display: block;
@@ -60,6 +54,11 @@ table th:last-child, table td:last-child {
   padding-right: 9px;
   padding-left: 20px;
   text-align: right;
+}
+table th:first-child, table td:first-child {
+  padding-right: 20px;
+  padding-left: 9px;
+  text-align: left;
 }
 table tr[data-url]:hover {
   cursor: pointer;
