@@ -11,7 +11,7 @@
   <p>{{ action.aws_hostname|escape }}</p>
 
   <h3>Operations</h3>
-  <table class="clickable_rows">
+  <table>
     <thead>
       <tr>
         <th scope="col">Description</th>
@@ -19,11 +19,10 @@
       </tr>
     </thead>
     <tbody>
-      {% for operation in operations %}
+      {% for item in operations %}
         <tr>
-          <td>{{ operation.description|escape }}</td>
-          <td>{{ operation.completed|date:"Y-m-d H:i" }}</td>
-          <td>{{ operation.error|escape }}</td>
+          <td>{{ item.operation.description|escape }}</td>
+          <td>{{ item.status|escape }}</td>
         </tr>
       {% endfor %}
     </tbody>

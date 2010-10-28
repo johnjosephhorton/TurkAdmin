@@ -1,6 +1,7 @@
 from google.appengine.ext import webapp
 from google.appengine.ext import db as datastore
 from google.appengine.ext.webapp.util import run_wsgi_app as run_wsgi
+from google.appengine.api.labs import taskqueue
 
 from turkadmin.http import RequestHandler
 from turkadmin.mturk import Connection as MTurkConnection, get_assignments
@@ -78,7 +79,7 @@ def validates_posted_assignment_ids_param(fn):
 
       hit_assignment_ids = get_assignments(connection, self.hit_id, lambda item: item.AssignmentId)
 
-      invalid_ids = assignment_ids.difference(set(hit_assignment_ids))
+      invalid_ids = self.assignment_ids.difference(set(hit_assignment_ids))
 
       if len(invalid_ids) == 0:
         return fn(self, *args, **kwargs)
@@ -91,7 +92,16 @@ def validates_posted_assignment_ids_param(fn):
 
 
 def action_operations(action):
-  return AbstractOperation.all().filter('action = ', self.action)
+  return AbstractOperation.all().filter('action = ', action)
+
+
+def operation_status(operation):
+  if operation.completed:
+    return 'Completed: %s' % operation.completed.strftime('%Y-%m-%d %H:%M')
+  elif operation.error:
+    return 'Error: %s' % operation.error
+  else:
+    return 'Pending'
 
 
 def operation_execute(key):
@@ -127,9 +137,14 @@ class ActionView(RequestHandler):
   @entity_required(Action, 'action')
   def get(self):
     if self.action.confirmed:
+      items = []
+
+      for operation in action_operations(self.action):
+        items.append(Struct(operation=operation, status=operation_status(operation)))
+
       self.render('priv/action_results.html', {
         'action': self.action
-      , 'operations': action_operations(self.action)
+      , 'operations': items
       })
     else:
       self.render('priv/action_preview.html', {
@@ -147,7 +162,7 @@ class ActionView(RequestHandler):
       self.action.put()
 
     for operation in action_operations(self.action):
-      taskqueue.add(self.operation_task_url(operation))
+      taskqueue.add(url='/operation/task', params={'key': operation.key()})
 
     self.redirect(self.request.url)
 
@@ -180,7 +195,7 @@ class AssignmentApprovalForm(RequestHandler):
       operation.hit_id = self.hit_id
       operation.put()
 
-    self.redirect(self.action_url(action))
+    self.redirect(self.action_url(self.action))
 
 
 class AssignmentRejectionForm(RequestHandler):
@@ -204,7 +219,7 @@ class AssignmentRejectionForm(RequestHandler):
       operation.reason = reason
       operation.put()
 
-    self.redirect(self.action_url(action))
+    self.redirect(self.action_url(self.action))
 
 
 class WorkerBonusForm(RequestHandler):
@@ -253,7 +268,7 @@ class WorkerBonusForm(RequestHandler):
         operation.action = self.action
         operation.put()
 
-      self.redirect(self.action_url(action))
+      self.redirect(self.action_url(self.action))
     else:
       self.bad_request('No worker_and_assignment_ids')
 
@@ -285,7 +300,7 @@ class WorkerNotificationForm(RequestHandler):
         operation.message_text = message_text
         operation.put()
 
-      self.redirect(self.action_url(action))
+      self.redirect(self.action_url(self.action))
     else:
       self.bad_request('No worker_ids')
 
