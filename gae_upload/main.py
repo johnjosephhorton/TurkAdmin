@@ -104,20 +104,20 @@ def operation_status(operation):
     return 'Pending'
 
 
-def operation_execute(key):
+def operation_execute(key, action):
   operation = datastore.get(key)
 
   if not operation.completed and not operation.error:
-    connection = MTurkConnection(operation.action)
+    connection = MTurkConnection(action)
 
     try:
       operation.execute(connection)
 
-      self.completed = datetime.now()
+      operation.completed = datetime.now()
     except (BotoClientError, BotoServerError), response:
-      self.error = response_error(response)
+      operation.error = response_error(response)
 
-    self.put()
+    operation.put()
 
 
 class ActionList(RequestHandler):
@@ -170,7 +170,7 @@ class ActionView(RequestHandler):
 class OperationTask(RequestHandler):
   @entity_required(AbstractOperation, 'operation')
   def post(self):
-    datastore.run_in_transaction(operation_execute, self.operation.key())
+    datastore.run_in_transaction(operation_execute, self.operation.key(), self.operation.action)
 
     self.write('OK')
 
