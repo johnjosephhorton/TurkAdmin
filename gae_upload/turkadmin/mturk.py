@@ -9,28 +9,21 @@ def Connection(obj):
   )
 
 
-def invalid_assignment_ids(obj):
-  mturk = Connection(obj)
+def get_assignments(connection, hit_id, fn=lambda x: x, status='Submitted', page_size=50):
+  page_number = 1
 
-  assignments = mturk.get_assignments(obj.hit_id, status='Submitted', page_size=50)
+  response = connection.get_assignments(hit_id, status=status, page_size=page_size)
 
-  assignment_ids = map(lambda item: item.AssignmentId, assignments)
+  items = map(fn, response)
 
-  return set(obj.assignment_ids).difference(set(assignment_ids))
+  total_num_results = int(response.TotalNumResults)
 
+  while total_num_results > len(items):
+    page_number += 1
 
-def notify_workers(notification):
-  conn = Connection(notification)
+    response = connection.get_assignments(hit_id, status=status, page_size=page_size, page_number=page_number)
 
-  params = {
-    'Subject': notification.message_subject
-  , 'MessageText': notification.message_text
-  }
+    for item in response:
+      items.append(fn(item))
 
-  if len(notification.worker_ids) == 1:
-    params['WorkerId'] = notification.worker_ids[0]
-  else:
-    for i in range(0, len(notification.worker_ids)):
-      params['WorkerId.%d' % (i + 1)] = notification.worker_ids[i]
-
-  return conn._process_request('NotifyWorkers', params)
+  return items

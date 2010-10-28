@@ -1,9 +1,7 @@
 {% extends "base.html" %}
 
 {% block body %}
-  <h2>Worker Bonus Form</h2>
-
-  <form action="{{ action|escape }}" method="POST" enctype="multipart/form-data">
+  <form action="{{ url|escape }}" method="POST" enctype="multipart/form-data">
     <div>
       <label>AWS Access Key ID</label>
       <input type="text" name="aws_access_key_id" size="50">

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block body %}
+  <form action="{{ url|escape }}" method="POST">
+    <h3>Created</h3>
+    <p>{{ action.created|date:"Y-m-d H:i" }}</p>
+
+    <h3>Creator</h3>
+    <p>{{ action.creator|escape }}</p>
+
+    <h3>AWS Hostname</h3>
+    <p>{{ action.aws_hostname|escape }}</p>
+
+    <h3>Operations</h3>
+    <table>
+      <tbody>
+        {% for operation in operations %}
+          <tr>
+            <td>{{ operation.description|escape }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div>
+      <input type="submit" value="Confirm">
+    </div>
+  </form>
+{% endblock %}

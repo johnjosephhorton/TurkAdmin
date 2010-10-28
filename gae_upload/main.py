@@ -3,10 +3,9 @@ from google.appengine.ext import db as datastore
 from google.appengine.ext.webapp.util import run_wsgi_app as run_wsgi
 
 from turkadmin.http import RequestHandler
-from turkadmin.models import AssignmentApproval, AssignmentRejection, WorkerBonus, WorkerNotification
-from turkadmin.mturk import Connection as MTurkConnection, invalid_assignment_ids, notify_workers
+from turkadmin.mturk import Connection as MTurkConnection, get_assignments
+from turkadmin.models import *
 
-from boto.mturk.price import Price
 from boto.exception import BotoClientError, BotoServerError
 
 from datetime import datetime
@@ -42,367 +41,261 @@ def entity_required(model, attr):
   return _decorate
 
 
+def response_error(response):
+  return '%s: %s' % (response.errors[0][0], response.errors[0][1])
+
+
 def throws_boto_errors(fn):
   def _fn(self, *args, **kwargs):
     try:
       return fn(self, *args, **kwargs)
     except (BotoClientError, BotoServerError), response:
-      self.internal_server_error('%s: %s' % (response.errors[0][0], response.errors[0][1]))
+      self.internal_server_error(response_error(response))
 
   return _fn
 
 
-def operation_construct(operation, request):
-  operation.aws_access_key_id = request.get('aws_access_key_id')
-  operation.aws_secret_access_key = request.get('aws_secret_access_key')
-  operation.aws_hostname = request.get('aws_hostname') or 'mechanicalturk.sandbox.amazonaws.com'
-  return operation
+def validates_posted_aws_params(fn):
+  def _fn(self, *args, **kwargs):
+    self.action = Action()
+    self.action.aws_access_key_id = self.request.get('aws_access_key_id')
+    self.action.aws_secret_access_key = self.request.get('aws_secret_access_key')
+    self.action.aws_hostname = self.request.get('aws_hostname') or 'mechanicalturk.sandbox.amazonaws.com'
+
+    return fn(self, *args, **kwargs)
+
+  return _fn
 
 
-class AssignmentStatusChangeView(RequestHandler):
-  def results(self, entity):
-    results = []
+def validates_posted_assignment_ids_param(fn):
+  def _fn(self, *args, **kwargs):
+    self.assignment_ids = set([row[0] for row in self.csv_reader('assignment_ids')])
 
-    for (assignment_id, status) in zip(entity.assignment_ids, entity.results):
-      results.append(Struct(assignment_id=assignment_id, status=status))
+    if len(self.assignment_ids) > 0:
+      self.hit_id = self.request.get('hit_id')
 
-    return results
+      connection = MTurkConnection(self.action)
 
-  def confirm(self, entity):
-    if entity.confirmed:
+      hit_assignment_ids = get_assignments(connection, self.hit_id, lambda item: item.AssignmentId)
+
+      invalid_ids = assignment_ids.difference(set(hit_assignment_ids))
+
+      if len(invalid_ids) == 0:
+        return fn(self, *args, **kwargs)
+      else:
+        self.bad_request('Bad assignment_ids: ' + repr(invalid_ids))
+    else:
+      self.bad_request('No assignment_ids')
+
+  return _fn
+
+
+def action_operations(action):
+  return AbstractOperation.all().filter('action = ', self.action)
+
+
+def operation_execute(key):
+  operation = datastore.get(key)
+
+  if not operation.completed and not operation.error:
+    connection = MTurkConnection(operation.action)
+
+    try:
+      operation.execute(connection)
+
+      self.completed = datetime.now()
+    except (BotoClientError, BotoServerError), response:
+      self.error = response_error(response)
+
+    self.put()
+
+
+class ActionList(RequestHandler):
+  def item(self, action):
+    return Struct(url=self.action_url(action), action=action)
+
+  def get(self):
+    self.render('priv/action_list.html', {
+      'items': map(self.item, Action.all().order('-created'))
+    })
+
+
+class ActionView(RequestHandler):
+  @entity_required(Action, 'action')
+  def get(self):
+    if self.action.confirmed:
+      self.render('priv/action_results.html', {
+        'action': self.action
+      , 'operations': action_operations(self.action)
+      })
+    else:
+      self.render('priv/action_preview.html', {
+        'action': self.action
+      , 'operations': action_operations(self.action)
+      , 'url': self.request.url
+      })
+
+  @entity_required(Action, 'action')
+  def post(self):
+    if self.action.confirmed:
       self.method_not_allowed()
     else:
-      entity.confirmed = datetime.now()
-      entity.put()
+      self.action.confirmed = datetime.now()
+      self.action.put()
 
-      mturk = MTurkConnection(entity)
+    for operation in action_operations(self.action):
+      taskqueue.add(self.operation_task_url(operation))
 
-      results = []
-
-      for assignment_id in entity.assignment_ids:
-        try:
-          results.append(self.status_change(mturk, assignment_id))
-        except (BotoClientError, BotoServerError), response:
-          message = 'Error: %s: %s' % (response.errors[0][0], response.errors[0][1])
-
-          results.append(message)
-
-          entity.results = results
-          entity.put()
-
-          self.internal_server_error(message)
-
-      entity.results = results
-      entity.put()
-
-      self.redirect(self.request.url)
+    self.redirect(self.request.url)
 
 
-class Actions(RequestHandler):
-  def get(self):
-    self.render('priv/actions.html', {})
+class OperationTask(RequestHandler):
+  @entity_required(AbstractOperation, 'operation')
+  def post(self):
+    datastore.run_in_transaction(operation_execute, self.operation.key())
 
-
-class AssignmentApprovalList(RequestHandler):
-  def item(self, approval):
-    return Struct(url=self.assignment_approval_url(approval), approval=approval)
-
-  def get(self):
-    self.render('priv/assignment_approval_list.html', {
-      'items': map(self.item, AssignmentApproval.all())
-    })
+    self.write('OK')
 
 
 class AssignmentApprovalForm(RequestHandler):
   def get(self):
     self.render('priv/assignment_approval_form.html', {
-      'action': self.request.url
+      'url': self.request.url
     })
 
   @throws_boto_errors
+  @validates_posted_aws_params
+  @validates_posted_assignment_ids_param
   def post(self):
-    approval = operation_construct(AssignmentApproval(), self.request)
-    approval.assignment_ids = list(set([row[0] for row in self.csv_reader('assignment_ids')]))
-    approval.hit_id = self.request.get('hit_id')
+    self.action.put()
 
-    if len(approval.assignment_ids) > 0:
-      invalid_ids = invalid_assignment_ids(approval)
+    for assignment_id in self.assignment_ids:
+      operation = ApproveAssignmentOperation()
+      operation.action = self.action
+      operation.description = 'Approve assignment %s' % assignment_id
+      operation.assignment_id = assignment_id
+      operation.hit_id = self.hit_id
+      operation.put()
 
-      if len(invalid_ids) == 0:
-        approval.put()
-
-        self.redirect(self.assignment_approval_url(approval))
-      else:
-        self.bad_request('Bad assignment_ids: ' + repr(invalid_ids))
-    else:
-      self.bad_request('No assignment_ids')
-
-
-class AssignmentApprovalView(AssignmentStatusChangeView):
-  @entity_required(AssignmentApproval, 'approval')
-  def get(self):
-    if self.approval.confirmed:
-      self.render('priv/assignment_approval_results.html', {
-        'approval': self.approval
-      , 'results': self.results(self.approval)
-      })
-    else:
-      self.render('priv/assignment_approval_preview.html', {
-        'approval': self.approval
-      , 'action': self.request.url
-      })
-
-  @entity_required(AssignmentApproval, 'approval')
-  def post(self):
-    self.confirm(self.approval)
-
-  def status_change(self, mturk, assignment_id):
-    mturk.approve_assignment(assignment_id)
-
-    return 'Approved'
-
-
-class AssignmentRejectionList(RequestHandler):
-  def item(self, approval):
-    return Struct(url=self.assignment_rejection_url(approval), approval=approval)
-
-  def get(self):
-    self.render('priv/assignment_rejection_list.html', {
-      'items': map(self.item, AssignmentRejection.all())
-    })
+    self.redirect(self.action_url(action))
 
 
 class AssignmentRejectionForm(RequestHandler):
   def get(self):
     self.render('priv/assignment_rejection_form.html', {
-      'action': self.request.url
+      'url': self.request.url
     })
 
   @throws_boto_errors
+  @validates_posted_aws_params
+  @validates_posted_assignment_ids_param
   def post(self):
-    rejection = operation_construct(AssignmentRejection(), self.request)
-    rejection.assignment_ids = list(set([row[0] for row in self.csv_reader('assignment_ids')]))
-    rejection.hit_id = self.request.get('hit_id')
-    rejection.reason = self.request.get('reason')
+    self.action.put()
 
-    if len(rejection.assignment_ids) > 0:
-      invalid_ids = invalid_assignment_ids(rejection)
+    for assignment_id in self.assignment_ids:
+      operation = RejectAssignmentOperation()
+      operation.action = self.action
+      operation.description = 'Reject assignment %s' % assignment_id
+      operation.assignment_id = assignment_id
+      operation.hit_id = self.hit_id
+      operation.reason = reason
+      operation.put()
 
-      if len(invalid_ids) == 0:
-        rejection.put()
-
-        self.redirect(self.assignment_rejection_url(rejection))
-      else:
-        self.bad_request('Bad assignment_ids: ' + repr(invalid_ids))
-    else:
-      self.bad_request('No assignment_ids')
-
-
-class AssignmentRejectionView(AssignmentStatusChangeView):
-  @entity_required(AssignmentRejection, 'rejection')
-  def get(self):
-    if self.rejection.confirmed:
-      self.render('priv/assignment_rejection_results.html', {
-        'rejection': self.rejection
-      , 'results': self.results(self.rejection)
-      })
-    else:
-      self.render('priv/assignment_rejection_preview.html', {
-        'rejection': self.rejection
-      , 'action': self.request.url
-      })
-
-  @entity_required(AssignmentRejection, 'rejection')
-  def post(self):
-    self.confirm(self.rejection)
-
-  def status_change(self, mturk, assignment_id):
-    mturk.reject_assignment(assignment_id, self.rejection.reason)
-
-    return 'Rejected'
-
-
-class WorkerBonusList(RequestHandler):
-  def item(self, bonus):
-    return Struct(url=self.worker_bonus_url(bonus), bonus=bonus)
-
-  def get(self):
-    self.render('priv/worker_bonus_list.html', {
-      'items': map(self.item, WorkerBonus.all())
-    })
+    self.redirect(self.action_url(action))
 
 
 class WorkerBonusForm(RequestHandler):
   def get(self):
     self.render('priv/worker_bonus_form.html', {
-      'action': self.request.url
+      'url': self.request.url
     })
 
   @throws_boto_errors
+  @validates_posted_aws_params
   def post(self):
-    bonus = operation_construct(WorkerBonus(), self.request)
-    bonus.hit_id = self.request.get('hit_id')
-    bonus.assignment_ids = []
-    bonus.worker_ids = []
-    bonus.amount = self.request.get('amount')
-    bonus.reason = self.request.get('reason')
+    hit_id = self.request.get('hit_id')
+    amount = self.request.get('amount')
+    reason = self.request.get('reason')
+
+    connection = MTurkConnection(self.action)
+
+    assignment_ids = {}
+
+    for item in get_assignments(connection, hit_id, status='Approved'):
+      assignment_ids[item.WorkerId] = item.AssignmentId
+
+    operations = []
 
     for row in self.csv_reader('worker_and_assignment_ids'):
-      bonus.worker_ids.append(row[0])
-      bonus.assignment_ids.append(row[1])
+      if assignment_ids.has_key(row[0]):
+        if row[1] == assignment_ids[row[0]]:
+          operation = GrantBonusOperation()
+          operation.description = 'Grant bonus to worker %s' % row[0]
+          operation.assignment_id = row[1]
+          operation.worker_id = row[0]
+          operation.hit_id = hit_id
+          operation.amount = amount
+          operation.reason = reason
 
-    if len(bonus.worker_ids) > 0:
-      mturk = MTurkConnection(bonus)
-
-      worker_and_assignment_ids, invalid_ids = {}, []
-
-      for item in mturk.get_assignments(bonus.hit_id, status='Approved', page_size=50):
-        worker_and_assignment_ids[item.WorkerId] = item.AssignmentId
-
-      for (worker_id, assignment_id) in zip(bonus.worker_ids, bonus.assignment_ids):
-        if worker_and_assignment_ids[worker_id] == assignment_id:
-          pass
+          operations.append(operation)
         else:
-          invalid_ids.append(worker_id)
-
-      if len(invalid_ids) == 0:
-        bonus.put()
-
-        self.redirect(self.worker_bonus_url(bonus))
+          self.bad_request('Bad assignment id: ' + repr(row[1]))
       else:
-        self.bad_request('Bad worker_and_assignment_ids: ' + repr(invalid_ids))
+        self.bad_request('Bad worker id: ' + repr(row[0]))
+
+    if len(operations) > 0:
+      self.action.put()
+
+      for operation in operations:
+        operation.action = self.action
+        operation.put()
+
+      self.redirect(self.action_url(action))
     else:
       self.bad_request('No worker_and_assignment_ids')
-
-
-class WorkerBonusView(RequestHandler):
-  @entity_required(WorkerBonus, 'bonus')
-  def get(self):
-    if self.bonus.confirmed:
-      results = []
-
-      for (worker_id, assignment_id, status) in zip(self.bonus.worker_ids, self.bonus.assignment_ids, self.bonus.results):
-        results.append(Struct(worker_id=worker_id, assignment_id=assignment_id, status=status))
-
-      self.render('priv/worker_bonus_results.html', {
-        'bonus': self.bonus
-      , 'results': results
-      })
-    else:
-      worker_and_assignment_ids = []
-
-      for (worker_id, assignment_id) in zip(self.bonus.worker_ids, self.bonus.assignment_ids):
-        worker_and_assignment_ids.append(Struct(worker_id=worker_id, assignment_id=assignment_id))
-
-      self.render('priv/worker_bonus_preview.html', {
-        'worker_and_assignment_ids': worker_and_assignment_ids
-      , 'bonus': self.bonus
-      , 'action': self.request.url
-      })
-
-  @entity_required(WorkerBonus, 'bonus')
-  def post(self):
-    if self.bonus.confirmed:
-      self.bonus.method_not_allowed()
-    else:
-      self.bonus.confirmed = datetime.now()
-      self.bonus.put()
-
-      mturk = MTurkConnection(self.bonus)
-
-      results = []
-
-      bonus_price = Price(self.bonus.amount)
-
-      for (worker_id, assignment_id) in zip(self.bonus.worker_ids, self.bonus.assignment_ids):
-        try:
-          mturk.grant_bonus(worker_id, assignment_id, bonus_price, self.bonus.reason)
-
-          results.append('Granted')
-        except (BotoClientError, BotoServerError), response:
-          message = 'Error: %s: %s' % (response.errors[0][0], response.errors[0][1])
-
-          results.append(message)
-
-          self.bonus.results = results
-          self.bonus.put()
-
-          self.internal_server_error(message)
-
-      self.bonus.results = results
-      self.bonus.put()
-
-      self.redirect(self.request.url)
-
-
-class WorkerNotificationList(RequestHandler):
-  def item(self, notification):
-    return Struct(url=self.worker_notification_url(notification), notification=notification)
-
-  def get(self):
-    self.render('priv/worker_notification_list.html', {
-      'items': map(self.item, WorkerNotification.all())
-    })
 
 
 class WorkerNotificationForm(RequestHandler):
   def get(self):
     self.render('priv/worker_notification_form.html', {
-      'action': self.request.url
+      'url': self.request.url
     })
 
-  def post(self):
-    notification = operation_construct(WorkerNotification(), self.request)
-    notification.worker_ids = list(set([row[0] for row in self.csv_reader('worker_ids')]))
-    notification.message_subject = self.request.get('message_subject')
-    notification.message_text = self.request.get('message_text')
-    notification.put()
-
-    self.redirect(self.worker_notification_url(notification))
-
-
-class WorkerNotificationView(RequestHandler):
-  @entity_required(WorkerNotification, 'notification')
-  def get(self):
-    if self.notification.confirmed:
-      self.render('priv/worker_notification_results.html', {
-        'notification': self.notification
-      })
-    else:
-      self.render('priv/worker_notification_preview.html', {
-        'notification': self.notification
-      , 'action': self.request.url
-      })
-
   @throws_boto_errors
-  @entity_required(WorkerNotification, 'notification')
+  @validates_posted_aws_params
   def post(self):
-    if self.notification.confirmed:
-      self.method_not_allowed()
+    message_subject = self.request.get('message_subject')
+
+    message_text = self.request.get('message_text')
+
+    worker_ids = [row[0] for row in self.csv_reader('worker_ids')]
+
+    if len(worker_ids) > 0:
+      self.action.put()
+
+      for worker_id in worker_ids:
+        operation = NotifyWorkerOperation()
+        operation.action = self.action
+        operation.description = 'Notify worker %s' % worker_id
+        operation.worker_id = worker_id
+        operation.message_subject = message_subject
+        operation.message_text = message_text
+        operation.put()
+
+      self.redirect(self.action_url(action))
     else:
-      self.notification.confirmed = datetime.now()
-      self.notification.put()
-
-      notify_workers(self.notification)
-
-      self.redirect(self.request.url)
+      self.bad_request('No worker_ids')
 
 
 def handlers():
   return [
-    ('/', Actions)
-  , ('/assignment/approval/list', AssignmentApprovalList)
+    ('/', ActionList)
+  , ('/action', ActionView)
+  , ('/operation/task', OperationTask)
   , ('/assignment/approval/form', AssignmentApprovalForm)
-  , ('/assignment/approval', AssignmentApprovalView)
-  , ('/assignment/rejection/list', AssignmentRejectionList)
   , ('/assignment/rejection/form', AssignmentRejectionForm)
-  , ('/assignment/rejection', AssignmentRejectionView)
-  , ('/worker/bonus/list', WorkerBonusList)
   , ('/worker/bonus/form', WorkerBonusForm)
-  , ('/worker/bonus', WorkerBonusView)
-  , ('/worker/notification/list', WorkerNotificationList)
   , ('/worker/notification/form', WorkerNotificationForm)
-  , ('/worker/notification', WorkerNotificationView)
   ]
 
 

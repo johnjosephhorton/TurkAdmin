@@ -12,8 +12,8 @@ class RequestHandler(webapp.RequestHandler):
   def action_url(self, action):
     return '%s/action?key=%s' % (self.request.host_url, action.key())
 
-  # def operation_url(self, operation):
-  #   return '%s/operation?key=%s' % (self.request.host_url, operation.key())
+  def operation_task_url(self, operation):
+    return '%s/operation/task?key=%s' % (self.request.host_url, operation.key())
 
   def csv_reader(self, name):
     return csv.reader(StringIO(self.request.get(name)))

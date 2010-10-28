@@ -4,17 +4,17 @@
   <table class="clickable_rows">
     <thead>
       <tr>
+        <th scope="col">Created</th>
         <th scope="col">Confirmed</th>
-        <th scope="col">Message Subject</th>
-        <th scope="col">Workers</th>
+        <th scope="col">Creator</th>
       </tr>
     </thead>
     <tbody>
       {% for item in items %}
         <tr data-url="{{ item.url|escape }}">
-          <td>{{ item.notification.confirmed|date:"Y-m-d H:i" }}</td>
-          <td>{{ item.notification.message_subject|escape }}</td>
-          <td>{{ item.notification.worker_ids|length }}</td>
+          <td>{{ item.action.created|date:"Y-m-d H:i" }}</td>
+          <td>{{ item.action.confirmed|date:"Y-m-d H:i" }}</td>
+          <td>{{ item.action.creator|escape }}</td>
         </tr>
       {% endfor %}
     </tbody>

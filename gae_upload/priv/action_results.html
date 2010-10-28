@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block body %}
+  <h3>Created</h3>
+  <p>{{ action.created|date:"Y-m-d H:i" }}</p>
+
+  <h3>Creator</h3>
+  <p>{{ action.creator|escape }}</p>
+
+  <h3>AWS Hostname</h3>
+  <p>{{ action.aws_hostname|escape }}</p>
+
+  <h3>Operations</h3>
+  <table class="clickable_rows">
+    <thead>
+      <tr>
+        <th scope="col">Description</th>
+        <th scope="col">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for operation in operations %}
+        <tr>
+          <td>{{ operation.description|escape }}</td>
+          <td>{{ operation.completed|date:"Y-m-d H:i" }}</td>
+          <td>{{ operation.error|escape }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
