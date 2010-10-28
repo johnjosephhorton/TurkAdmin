@@ -9,17 +9,11 @@ import cgi, csv
 
 
 class RequestHandler(webapp.RequestHandler):
-  def assignment_approval_url(self, approval):
-    return '%s/assignment/approval?key=%s' % (self.request.host_url, approval.key())
+  def action_url(self, action):
+    return '%s/action?key=%s' % (self.request.host_url, action.key())
 
-  def assignment_rejection_url(self, rejection):
-    return '%s/assignment/rejection?key=%s' % (self.request.host_url, rejection.key())
-
-  def worker_bonus_url(self, bonus):
-    return '%s/worker/bonus?key=%s' % (self.request.host_url, bonus.key())
-
-  def worker_notification_url(self, notification):
-    return '%s/worker/notification?key=%s' % (self.request.host_url, notification.key())
+  # def operation_url(self, operation):
+  #   return '%s/operation?key=%s' % (self.request.host_url, operation.key())
 
   def csv_reader(self, name):
     return csv.reader(StringIO(self.request.get(name)))
@@ -51,3 +45,6 @@ class RequestHandler(webapp.RequestHandler):
 
   def method_not_allowed(self, text='Method Not Allowed'):
     self.reply(405, text)
+
+  def internal_server_error(self, text='Internal Server Error'):
+    self.reply(500, text)
