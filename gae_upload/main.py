@@ -232,8 +232,6 @@ class WorkerBonusForm(RequestHandler):
   @validates_posted_aws_params
   def post(self):
     hit_id = self.request.get('hit_id')
-    amount = self.request.get('amount')
-    reason = self.request.get('reason')
 
     connection = MTurkConnection(self.action)
 
@@ -244,7 +242,7 @@ class WorkerBonusForm(RequestHandler):
 
     operations = []
 
-    for row in self.csv_reader('worker_and_assignment_ids'):
+    for row in self.csv_reader('parameters'):
       if assignment_ids.has_key(row[0]):
         if row[1] == assignment_ids[row[0]]:
           operation = GrantBonusOperation()
@@ -252,8 +250,8 @@ class WorkerBonusForm(RequestHandler):
           operation.assignment_id = row[1]
           operation.worker_id = row[0]
           operation.hit_id = hit_id
-          operation.amount = amount
-          operation.reason = reason
+          operation.amount = row[2]
+          operation.reason = row[3]
 
           operations.append(operation)
         else:

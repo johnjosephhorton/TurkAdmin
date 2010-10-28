@@ -3,7 +3,7 @@ body {
   font-size: 14px;
 }
 
-h2, h3, p, form div, table, form label, form input, form textarea {
+h2, h3, p, form div, table, form label, form .hint, form input, form textarea {
   display: block;
 }
 
@@ -26,7 +26,13 @@ form div {
 form label {
   margin-bottom: 5px;
   font-weight: bold;
+  font-size: 13px;
+}
+form .hint {
+  margin-top: 10px;
+  margin-bottom: 10px;
   font-size: 12px;
+  color: #666;
 }
 form input[type=text] {
   padding: 3px 5px;
