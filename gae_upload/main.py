@@ -115,9 +115,12 @@ class ActionList(RequestHandler):
     return Struct(url=self.action_url(action), action=action)
 
   def get(self):
-    self.render('priv/action_list.html', {
-      'items': map(self.item, Action.all().order('-created'))
-    })
+    items = map(self.item, Action.all().order('-created'))
+
+    if len(items) > 0:
+      self.render('priv/action_list.html', {'items': items})
+    else:
+      self.render('priv/action_list_empty.html', {})
 
 
 class ActionView(RequestHandler):
