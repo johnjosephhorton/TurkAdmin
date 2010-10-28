@@ -2,9 +2,9 @@ from google.appengine.ext import webapp
 from google.appengine.ext import db as datastore
 from google.appengine.ext.webapp.util import run_wsgi_app as run_wsgi
 
-from turkontrol.http import RequestHandler
-from turkontrol.models import AssignmentApproval, AssignmentRejection, WorkerBonus, WorkerNotification
-from turkontrol.mturk import Connection as MTurkConnection, invalid_assignment_ids, notify_workers
+from turkadmin.http import RequestHandler
+from turkadmin.models import AssignmentApproval, AssignmentRejection, WorkerBonus, WorkerNotification
+from turkadmin.mturk import Connection as MTurkConnection, invalid_assignment_ids, notify_workers
 
 from boto.mturk.price import Price
 from boto.exception import BotoClientError, BotoServerError
