@@ -268,7 +268,7 @@ class WorkerBonusForm(RequestHandler):
 
       self.redirect(self.action_url(self.action))
     else:
-      self.bad_request('No worker_and_assignment_ids')
+      self.bad_request('No parameters')
 
 
 class WorkerNotificationForm(RequestHandler):
@@ -280,27 +280,25 @@ class WorkerNotificationForm(RequestHandler):
   @throws_boto_errors
   @validates_posted_aws_params
   def post(self):
-    message_subject = self.request.get('message_subject')
+    operations = []
 
-    message_text = self.request.get('message_text')
+    for row in self.csv_reader('parameters'):
+      operation = NotifyWorkerOperation()
+      operation.description = 'Notify worker %s' % row[0]
+      operation.worker_id = row[0]
+      operation.message_subject = row[1]
+      operation.message_text = row[2]
 
-    worker_ids = [row[0] for row in self.csv_reader('worker_ids')]
-
-    if len(worker_ids) > 0:
+    if len(operations) > 0:
       self.action.put()
 
-      for worker_id in worker_ids:
-        operation = NotifyWorkerOperation()
+      for operation in operations:
         operation.action = self.action
-        operation.description = 'Notify worker %s' % worker_id
-        operation.worker_id = worker_id
-        operation.message_subject = message_subject
-        operation.message_text = message_text
         operation.put()
 
       self.redirect(self.action_url(self.action))
     else:
-      self.bad_request('No worker_ids')
+      self.bad_request('No parameters')
 
 
 def handlers():

@@ -5,18 +5,9 @@
     {% include "aws_form_inputs.html" %}
 
     <div>
-      <label>Message Subject</label>
-      <input type="text" name="message_subject" size="50">
-    </div>
-
-    <div>
-      <label>Message Text</label>
-      <textarea name="message_text" rows="10" cols="60"></textarea>
-    </div>
-
-    <div>
-      <label>Worker IDs (1-column CSV)</label>
-      <input type="file" name="worker_ids">
+      <label>Parameters (.csv file)</label>
+      <span class="hint">3 columns: Worker ID, Message Subject, and Message Text.</span>
+      <input type="file" name="parameters">
     </div>
 
     <div>
