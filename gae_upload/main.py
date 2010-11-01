@@ -20,6 +20,10 @@ class Struct(object):
     return self._attrs[attr]
 
 
+def string_is_blank(value):
+  return len(value) == 0 or value.isspace()
+
+
 def entity_required(model, attr):
   def _decorate(fn):
     def _wrapper_fn(self, *args, **kwargs):
@@ -56,14 +60,39 @@ def throws_boto_errors(fn):
   return _fn
 
 
+def validates_presence_of(param):
+  def _decorate(fn):
+    def _fn(self, *args, **kwargs):
+      value = self.request.get(param, None)
+
+      if value is None:
+        self.bad_request('No ' + param)
+      elif string_is_blank(value):
+        self.bad_request('Bad %s (cannot be blank)' % param)
+      else:
+        return fn(self, *args, **kwargs)
+
+    return _fn
+  return _decorate
+
+
 def validates_posted_aws_params(fn):
   def _fn(self, *args, **kwargs):
     self.action = Action()
-    self.action.aws_access_key_id = self.request.get('aws_access_key_id')
-    self.action.aws_secret_access_key = self.request.get('aws_secret_access_key')
+    self.action.aws_access_key_id = self.request.get('aws_access_key_id', None)
+    self.action.aws_secret_access_key = self.request.get('aws_secret_access_key', None)
     self.action.aws_hostname = self.request.get('aws_hostname') or 'mechanicalturk.sandbox.amazonaws.com'
 
-    return fn(self, *args, **kwargs)
+    if self.action.aws_access_key_id is None:
+      self.bad_request('No aws_access_key_id')
+    elif string_is_blank(self.action.aws_access_key_id):
+      self.bad_request('Bad aws_access_key_id (cannot be blank)')
+    elif self.action.aws_secret_access_key is None:
+      self.bad_request('No aws_secret_access_key')
+    elif string_is_blank(self.action.aws_secret_access_key):
+      self.bad_request('Bad aws_secret_access_key (cannot be blank)')
+    else:
+      return fn(self, *args, **kwargs)
 
   return _fn
 
@@ -198,6 +227,7 @@ class AssignmentApprovalForm(RequestHandler):
 
   @throws_boto_errors
   @validates_posted_aws_params
+  @validates_presence_of('hit_id')
   @validates_posted_assignment_ids_param
   def post(self):
     self.action.put()
@@ -221,6 +251,7 @@ class AssignmentRejectionForm(RequestHandler):
 
   @throws_boto_errors
   @validates_posted_aws_params
+  @validates_presence_of('hit_id')
   @validates_posted_assignment_ids_param
   def post(self):
     self.action.put()
@@ -245,6 +276,7 @@ class WorkerBonusForm(RequestHandler):
 
   @throws_boto_errors
   @validates_posted_aws_params
+  @validates_presence_of('hit_id')
   def post(self):
     hit_id = self.request.get('hit_id')
 
