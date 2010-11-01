@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+
+{% block body %}
+  {% for property in properties %}
+    <h3>{{ property.name|title|escape }}</h3>
+    <p>{{ property.value|escape }}</p>
+  {% endfor %}
+{% endblock %}

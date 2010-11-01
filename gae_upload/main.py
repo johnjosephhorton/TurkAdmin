@@ -134,17 +134,15 @@ class ActionList(RequestHandler):
 
 
 class ActionView(RequestHandler):
+  def item(self, operation):
+    return Struct(operation=operation, status=operation_status(operation), url=self.operation_url(operation))
+
   @entity_required(Action, 'action')
   def get(self):
     if self.action.confirmed:
-      items = []
-
-      for operation in action_operations(self.action):
-        items.append(Struct(operation=operation, status=operation_status(operation)))
-
       self.render('priv/action_results.html', {
         'action': self.action
-      , 'operations': items
+      , 'operations': [self.item(operation) for operation in action_operations(self.action)]
       })
     else:
       self.render('priv/action_preview.html', {
@@ -165,6 +163,23 @@ class ActionView(RequestHandler):
       taskqueue.add(url='/operation/task', params={'key': operation.key()})
 
     self.redirect(self.request.url)
+
+
+class OperationView(RequestHandler):
+  @entity_required(AbstractOperation, 'operation')
+  def get(self):
+    properties = []
+
+    properties.append(Struct(name='status', value=operation_status(self.operation)))
+
+    properties.append(Struct(name='description', value=self.operation.description))
+
+    for name in set(dir(self.operation.__class__)).difference(set(dir(AbstractOperation))):
+      properties.append(Struct(name=name.replace('_', ' '), value=getattr(self.operation, name)))
+
+    self.render('priv/operation_view.html', {
+      'properties': properties
+    })
 
 
 class OperationTask(RequestHandler):
@@ -305,6 +320,7 @@ def handlers():
   return [
     ('/', ActionList)
   , ('/action', ActionView)
+  , ('/operation', OperationView)
   , ('/operation/task', OperationTask)
   , ('/assignment/approval/form', AssignmentApprovalForm)
   , ('/assignment/rejection/form', AssignmentRejectionForm)
